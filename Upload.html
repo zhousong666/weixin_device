@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+ 
+ 
+<script type="text/javascript" src="http://code.jquery.com/jquery-1.9.1.js"></script>
+<!-- 微信jssdk -->
+ <script src="https://res.wx.qq.com/open/js/jweixin-1.2.0.js"></script> 
+ 
+<script type="text/javascript">
+function base64_to_bytes_array(base64String) {
+    var result = new Array();
+    if (base64String.length % 4 != 0 || base64String.length == 0) {
+        return result;
+    }
+    var b64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    // 先将后面的字段转换成原来的Byte数组
+    var len = base64String.length;
+    var endBytes = new Array();
+    if (base64String.charAt(len - 1) == "=") {
+        if (base64String.charAt(len - 2) == "=") { // 有两个等号的情况
+            var s1 = base64String.charAt(len - 4); // 后面的第一个字符
+            var s2 = base64String.charAt(len - 3); // 后面的第二个字符
+            var v1 = ((b64Chars.indexOf(s1) << 2) & 0xFF) +
+                (b64Chars.indexOf(s2) >> 4); //这个就是最后面的一个字节
+            endBytes[0] = v1;
+        } else { // 只有一个等号的情况
+            var s1 = base64String.charAt(len - 4); // 后面的第一个字符
+            var s2 = base64String.charAt(len - 3); // 后面的第二个字符
+            var s3 = base64String.charAt(len - 2); // 后面的第三个字符
+            var v1 = ((b64Chars.indexOf(s1) << 2) & 0xFF) +
+                (b64Chars.indexOf(s2) >> 4); //这个就是最后面的第一个字节
+            var v2 = ((b64Chars.indexOf(s2) << 4) & 0xFF) +
+                (b64Chars.indexOf(s3) >> 2); //这个就是最后面的第二个字节
+            endBytes[0] = v1;
+            endBytes[1] = v2;
+        }
+    }
+ 
+    var times = base64String.length / 4;
+    for (var i = 0; i < times - (endBytes.length == 0 ? 0 : 1); i++) {
+        var startIndex = i * 4;
+        var V1 = base64String.charAt(startIndex + 0);
+        var V2 = base64String.charAt(startIndex + 1);
+        var V3 = base64String.charAt(startIndex + 2);
+        var V4 = base64String.charAt(startIndex + 3);
+        result[i * 3 + 0] = ((b64Chars.indexOf(V1) << 2) & 0xFF) +
+            (b64Chars.indexOf(V2) >> 4);
+        result[i * 3 + 1] = ((b64Chars.indexOf(V2) << 4) & 0xFF) +
+            (b64Chars.indexOf(V3) >> 2);
+        result[i * 3 + 2] = ((b64Chars.indexOf(V3) << 6) & 0xFF) +
+            b64Chars.indexOf(V4);
+    }
+    return result.concat(endBytes);
+}
+ 
+wx.ready(function() {
+        var DEVICEID = '';
+        var SENDSTR = '';
+        //初始化设备库 需填写参数 公众号的原始ID
+        wx.invoke(
+                'openWXDeviceLib', {
+                    'brandUserName': 'gh_d0a3'//公众号的原始ID 需要修改
+                },
+                function(res) {
+                   // alert("openWXDeviceLib|err_msg:"+res.err_msg);
+                    if (res.err_msg == 'openWXDeviceLib:ok') {
+                        if (res.bluetoothState == 'on') {
+                            if (res.isSupportBLE == 'yes') {
+                                //获取到设备信息
+                                wx.invoke(
+                                        'getWXDeviceInfos', {
+                                            'brandUserName': 'gh_d0a3'//公众号的原始ID 需要修改
+                                        },
+                                        function(res) {
+                                            if (res.err_msg == 'getWXDeviceInfos:ok') {
+                                            	//alert('获取设备信息成功');
+                                                for (var i = 0; i < res.deviceInfos.length; i++) {
+                                                    var did = res.deviceInfos[i].deviceId;
+                                                    var dstate = res.deviceInfos[i].state;
+                                                    if (dstate == 'connected') {
+                                                        DEVICEID = did;
+                                                    }
+                                                }
+                                                if (DEVICEID == '') {
+                                                  //  	alert('没有设备信息');
+                                                    //window.location.href = 'qrcode.html?v=1.0.3';
+                                                   // wx.invoke('startScanWXDevice', {}, function(res){
+                                                   // 	alert("扫描设备返回:"+res.err_msg);
+                                                   //  });
+                                                  $.toast("还未绑定设备", "text");
+                                                     return false;
+                                                }
+                                            } else {
+                                                alert('获取设备信息失败');
+                                                return false;
+                                            }
+                                        });
+ 
+                            } else if (res.isSupportBLE == 'no') {
+                                alert('手机不支持BLE');
+                                return false;
+                            }
+ 
+                        } else if (res.bluetoothState == 'off') {
+                            alert('手机蓝牙没有打开');
+                            return false;
+ 
+                        } else if (res.bluetoothState == 'unauthorized') {
+                            alert('用户没有授权微信使用蓝牙功能');
+                            return false;
+                        }
+ 
+                    } else if (res.err_msg == 'openWXDeviceLib:fail') {
+                        alert('初始化设备库失败');
+                        return false;
+                    }
+ 
+                });
+ 
+        //手机蓝牙状态改变时触发 （这是监听事件的调用方法，注意，监听事件都没有参数）
+        wx.on('onWXDeviceBluetoothStateChange', function(res) {
+            //把res输出来看吧
+            alert("onWXDeviceBluetoothStateChange:" + res.err_msg);
+        });
+ 
+        //设备绑定状态改变事件（解绑成功，绑定成功的瞬间，会触发）
+        wx.on('onWXDeviceBindStateChange', function(res) {
+            //把res输出来看吧
+            alert("onWXDeviceBindStateChange:" + res.err_msg);
+        });
+ 
+        //设备连接状态改变
+        wx.on('onWXDeviceStateChange', function(res) {
+            //有3个状态：connecting连接中,connected已连接,unconnected未连接
+            //每当手机和设备之间的状态改变的瞬间，会触发一次
+            //alert("onWXDeviceStateChange:"+res.err_msg);
+        });
+        // 接收到设备数据
+        wx.on('onReceiveDataFromWXDevice', function(res) {
+            alert("res.base64Data:"+res.base64Data);
+            
+            var Bytes = base64_to_bytes_array(res.base64Data);
+            alert("Bytes:"+Bytes);
+            
+           
+           
+        });
+ 
+    });
+ 
+ 
+ 
+ 
+	wx.config({
+	    beta:true,                  //坑：这个很重要，必须配置这个为true,才能调用微信的硬件API
+	    debug: false,               //是否开启调试模式，会自动弹一些消息框显示微信返回的数据
+	    appId: '${appId}',
+	    timestamp:'${timestamp}',
+	    nonceStr: '${nonceStr}',
+	    signature: '${signature}',
+	    jsApiList: [                //需要调用的接口，都得在这里面写一遍
+	        "openWXDeviceLib",//初始化设备库（只支持蓝牙设备）
+	        "closeWXDeviceLib",//关闭设备库（只支持蓝牙设备）
+	        "getWXDeviceInfos",//获取设备信息（获取当前用户已绑定的蓝牙设备列表）
+	        "sendDataToWXDevice",//发送数据给设备
+	        "startScanWXDevice",//扫描设备（获取周围所有的设备列表，无论绑定还是未被绑定的设备都会扫描到）
+	        "stopScanWXDevice",//停止扫描设备
+	        "connectWXDevice",//连接设备
+	        "disconnectWXDevice",//断开设备连接
+	        "getWXDeviceTicket",//获取操作凭证
+	        //下面是监听事件：
+	        "onWXDeviceBindStateChange",//微信客户端设备绑定状态被改变时触发此事件
+	        "onWXDeviceStateChange",//监听连接状态，可以监听连接中、连接上、连接断开
+	        "onReceiveDataFromWXDevice",//接收到来自设备的数据时触发
+	        "onScanWXDeviceResult",//扫描到某个设备时触发
+	        "onWXDeviceBluetoothStateChange"//手机蓝牙打开或关闭时触发
+	    ]
+	});
+ 
+	
+</script>
+ 
+</html>
